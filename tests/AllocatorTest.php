@@ -138,7 +138,7 @@ class AllocatorTest extends TestCase
         // Weight 1:1, previous was 60, 40 of 100 → correct 50, 50
         // New amount 0 → grand total 100 → correct cumulative: 50, 50
         // New: 50-60 = -10, 50-40 = +10
-        $result = Allocator::allocate(0, array(1, 1), array(60, 40));
+        $result = Allocator::allocate(0, array(1, 1), array(60, 40), true);
         $this->assertEquals(array(-10, 10), $result);
         $this->assertEquals(0, array_sum($result));
     }

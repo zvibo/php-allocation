@@ -20,7 +20,7 @@ class Allocator
         $amount,
         array $weights,
         array $previousAllocations = array(),
-        $allowNegative = true
+        $allowNegative = false
     ) {
         $count = count($weights);
 
