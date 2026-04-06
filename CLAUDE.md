@@ -31,3 +31,5 @@ Allocator::allocate(int $amount, int[] $weights, int[] $previousAllocations = []
 - **$allowNegative**: when `false`, negative allocations are clamped to 0 and the remainder is redistributed among eligible shareholders
 
 The algorithm computes each shareholder's correct cumulative total (proportional to weight) using the largest-remainder method, then subtracts previous allocations. This auto-heals any penny errors from prior rounds — a shareholder who was previously overpaid gets less in the next round, and vice versa. New allocations can be negative if correction requires it (unless `$allowNegative = false`).
+
+**What makes this different from standard libraries:** The largest-remainder method itself is well-known (e.g. `brick/money`, npm's `largest-remainder-round`), but those libraries treat each allocation as a one-shot operation. This library's round-over-round healing — computing corrective deltas from cumulative previous allocations — is not available in standard apportionment libraries.
