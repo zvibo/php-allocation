@@ -281,4 +281,112 @@ class AllocatorTest extends TestCase
             $this->assertTrue($v === 333333 || $v === 333334);
         }
     }
+
+    // ---------------------------------------------------------------
+    //  allowNegative = false
+    // ---------------------------------------------------------------
+
+    public function testNoNegativeClampsSingleOverpaidShareholder()
+    {
+        // Weight 1:1, previous 60,40 of 100. With allowNegative=true: [-10, 10]
+        // With allowNegative=false: overpaid shareholder gets 0, rest gets all
+        $result = Allocator::allocate(0, array(1, 1), array(60, 40), false);
+        $this->assertEquals(0, array_sum($result));
+        $this->assertGreaterThanOrEqual(0, min($result));
+        $this->assertEquals(array(0, 0), $result);
+    }
+
+    public function testNoNegativeRedistributesToEligible()
+    {
+        // Weight 1:2, previous 4,6 of 10. New amount 30 → grand total 40.
+        // With negatives allowed: [9, 21]. No negatives here, so same result.
+        $result = Allocator::allocate(30, array(1, 2), array(4, 6), false);
+        $this->assertEquals(30, array_sum($result));
+        $this->assertGreaterThanOrEqual(0, min($result));
+    }
+
+    public function testNoNegativeWithOverpaymentRedistributes()
+    {
+        // Weight 1:1:1, previous 50,0,0 of 50. New amount 100 → grand total 150.
+        // Correct cumulative: 50,50,50. New: 0,50,50. No negatives naturally.
+        $result = Allocator::allocate(100, array(1, 1, 1), array(50, 0, 0), false);
+        $this->assertEquals(100, array_sum($result));
+        $this->assertGreaterThanOrEqual(0, min($result));
+        // Cumulative: 50,50,50
+        $cumulative = array(50 + $result[0], 0 + $result[1], 0 + $result[2]);
+        $this->assertEquals(array(50, 50, 50), $cumulative);
+    }
+
+    public function testNoNegativeWhenCorrectionWouldBeNegative()
+    {
+        // Weight 1:1, previous 80,20 of 100. New amount 10 → grand total 110.
+        // Correct cumulative: 55,55. New: 55-80=-25, 55-20=35.
+        // With no negative: shareholder 0 gets 0, shareholder 1 gets all 10.
+        $result = Allocator::allocate(10, array(1, 1), array(80, 20), false);
+        $this->assertEquals(10, array_sum($result));
+        $this->assertEquals(0, $result[0]);
+        $this->assertEquals(10, $result[1]);
+    }
+
+    public function testNoNegativePreservesResultWhenNoNegativesExist()
+    {
+        // When no negatives would occur, result is identical
+        $withNeg    = Allocator::allocate(100, array(1, 2, 7));
+        $withoutNeg = Allocator::allocate(100, array(1, 2, 7), array(), false);
+        $this->assertEquals($withNeg, $withoutNeg);
+    }
+
+    public function testNoNegativeSumInvariant()
+    {
+        // Various cases where negatives would normally appear
+        $cases = array(
+            array(10,  array(1, 1),    array(80, 20)),
+            array(0,   array(1, 1),    array(60, 40)),
+            array(5,   array(1, 1, 1), array(50, 25, 25)),
+            array(100, array(1, 9),    array(90, 10)),
+        );
+
+        foreach ($cases as $case) {
+            $result = Allocator::allocate($case[0], $case[1], $case[2], false);
+            $this->assertEquals($case[0], array_sum($result),
+                sprintf('Sum mismatch for amount=%d', $case[0]));
+            $this->assertGreaterThanOrEqual(0, min($result),
+                sprintf('Negative allocation for amount=%d', $case[0]));
+        }
+    }
+
+    public function testNoNegativeMultipleShareholdersOverpaid()
+    {
+        // Weight 1:1:1, previous 40,40,20 of 100. New amount 20 → grand total 120.
+        // Correct cumulative: 40,40,40. New: 0,0,20. No negatives naturally.
+        $result = Allocator::allocate(20, array(1, 1, 1), array(40, 40, 20), false);
+        $this->assertEquals(20, array_sum($result));
+        $this->assertGreaterThanOrEqual(0, min($result));
+    }
+
+    public function testNoNegativeMultiRoundConvergence()
+    {
+        // Simulate rounds with no-negative constraint
+        $weights = array(1, 1, 1);
+        $cumulative = array(0, 0, 0);
+
+        for ($round = 0; $round < 10; $round++) {
+            $allocation = Allocator::allocate(10, $weights, $cumulative, false);
+            $this->assertEquals(10, array_sum($allocation));
+            $this->assertGreaterThanOrEqual(0, min($allocation));
+            for ($i = 0; $i < 3; $i++) {
+                $cumulative[$i] += $allocation[$i];
+            }
+        }
+
+        $this->assertEquals(100, array_sum($cumulative));
+    }
+
+    public function testNoNegativeWithZeroWeightShareholder()
+    {
+        $result = Allocator::allocate(100, array(0, 1, 1), array(0, 0, 0), false);
+        $this->assertEquals(0, $result[0]);
+        $this->assertEquals(100, array_sum($result));
+        $this->assertGreaterThanOrEqual(0, min($result));
+    }
 }

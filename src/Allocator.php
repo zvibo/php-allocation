@@ -16,8 +16,12 @@ class Allocator
      * @return int[] New allocation per shareholder (pennies). The sum of these
      *               values equals $amount exactly.
      */
-    public static function allocate($amount, array $weights, array $previousAllocations = array())
-    {
+    public static function allocate(
+        $amount,
+        array $weights,
+        array $previousAllocations = array(),
+        $allowNegative = true
+    ) {
         $count = count($weights);
 
         if ($count === 0) {
@@ -46,28 +50,34 @@ class Allocator
             }
         }
 
+        $newAllocations = self::computeAllocations($amount, $weights, $previousAllocations);
+
+        if (!$allowNegative) {
+            $newAllocations = self::clampNegatives($amount, $weights, $previousAllocations, $newAllocations);
+        }
+
+        return $newAllocations;
+    }
+
+    private static function computeAllocations($amount, array $weights, array $previousAllocations)
+    {
+        $count = count($weights);
+        $totalWeight = array_sum($weights);
         $previousTotal = array_sum($previousAllocations);
         $grandTotal = $previousTotal + $amount;
 
-        // Calculate the ideal (exact) cumulative allocation for each shareholder.
-        // Then the new allocation = ideal cumulative - previous allocation.
-        // Use the "largest remainder" method to distribute rounding residuals.
-        $idealCumulative = array();
         $floored = array();
         $remainders = array();
 
         for ($i = 0; $i < $count; $i++) {
             $exact = ($weights[$i] / $totalWeight) * $grandTotal;
-            $idealCumulative[$i] = $exact;
             $floored[$i] = (int) floor($exact);
             $remainders[$i] = $exact - $floored[$i];
         }
 
-        // Distribute leftover pennies to shareholders with the largest remainders.
         $flooredSum = array_sum($floored);
         $leftover = $grandTotal - $flooredSum;
 
-        // Build index array sorted by remainder descending, ties broken by index.
         $indices = range(0, $count - 1);
         usort($indices, function ($a, $b) use ($remainders) {
             $diff = $remainders[$b] - $remainders[$a];
@@ -81,10 +91,57 @@ class Allocator
             $correctCumulative[$indices[$j]]++;
         }
 
-        // New allocation = correct cumulative total - what was already allocated.
         $newAllocations = array();
         for ($i = 0; $i < $count; $i++) {
             $newAllocations[$i] = $correctCumulative[$i] - $previousAllocations[$i];
+        }
+
+        return $newAllocations;
+    }
+
+    private static function clampNegatives($amount, array $weights, array $previousAllocations, array $newAllocations)
+    {
+        $count = count($weights);
+
+        // Iteratively clamp negatives to zero and redistribute among the rest.
+        // Each iteration may produce new negatives, so loop until stable.
+        while (true) {
+            $hasNegative = false;
+            $clamped = array_fill(0, $count, false);
+            $remainingAmount = $amount;
+            $remainingWeights = $weights;
+
+            for ($i = 0; $i < $count; $i++) {
+                if ($newAllocations[$i] < 0) {
+                    $hasNegative = true;
+                    $clamped[$i] = true;
+                    $newAllocations[$i] = 0;
+                    $remainingWeights[$i] = 0;
+                }
+            }
+
+            if (!$hasNegative) {
+                break;
+            }
+
+            // Redistribute: the clamped shareholders get 0, the rest
+            // share the full $amount with adjusted previous allocations.
+            $adjustedPrev = array();
+            for ($i = 0; $i < $count; $i++) {
+                $adjustedPrev[$i] = $clamped[$i] ? 0 : $previousAllocations[$i];
+                if ($clamped[$i]) {
+                    $remainingAmount -= 0; // clamped get 0
+                }
+            }
+
+            $newAllocations = self::computeAllocations($remainingAmount, $remainingWeights, $adjustedPrev);
+
+            // Force clamped shareholders back to 0
+            for ($i = 0; $i < $count; $i++) {
+                if ($clamped[$i]) {
+                    $newAllocations[$i] = 0;
+                }
+            }
         }
 
         return $newAllocations;
