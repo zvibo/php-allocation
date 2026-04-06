@@ -14,5 +14,19 @@ PHP library for auto-healing penny errors when distributing funds to shareholder
 
 ## Tech Stack
 
-- PHP with PHPUnit 4.8 for testing
-- Composer for dependency management
+- PHP 8.x with PHPUnit 9.x for testing
+- Composer for dependency management (PSR-4 autoloading under `Allocation\` namespace)
+
+## Architecture
+
+The core class is `Allocation\Allocator` (`src/Allocator.php`) with a single static method:
+
+```php
+Allocator::allocate(int $amount, int[] $weights, int[] $previousAllocations = [])
+```
+
+- **$amount**: new pennies to distribute
+- **$weights**: integer share count per shareholder
+- **$previousAllocations**: cumulative pennies already allocated per shareholder
+
+The algorithm computes each shareholder's correct cumulative total (proportional to weight) using the largest-remainder method, then subtracts previous allocations. This auto-heals any penny errors from prior rounds — a shareholder who was previously overpaid gets less in the next round, and vice versa. New allocations can be negative if correction requires it.
