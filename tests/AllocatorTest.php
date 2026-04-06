@@ -389,4 +389,57 @@ class AllocatorTest extends TestCase
         $this->assertEquals(100, array_sum($result));
         $this->assertGreaterThanOrEqual(0, min($result));
     }
+
+    public function testNoNegativeRemainingShareholdersFairCumulative()
+    {
+        // One shareholder massively over-allocated, three others under-allocated unevenly.
+        // Verify the remaining three end up with fair cumulative totals.
+        $weights = array(1, 1, 1, 1);
+        $previous = array(200, 5, 3, 2);
+        $result = Allocator::allocate(100, $weights, $previous, false);
+
+        $this->assertEquals(100, array_sum($result));
+        $this->assertEquals(0, $result[0]);
+
+        // Remaining shareholders' cumulative totals should differ by at most 1 penny
+        $cumulative = array();
+        for ($i = 1; $i < 4; $i++) {
+            $cumulative[] = $previous[$i] + $result[$i];
+        }
+        $this->assertLessThanOrEqual(1, max($cumulative) - min($cumulative));
+    }
+
+    public function testNoNegativeMultipleOverAllocatedFairToRest()
+    {
+        // Two shareholders over-allocated, two under-allocated
+        $weights = array(1, 1, 1, 1);
+        $previous = array(300, 200, 0, 0);
+        $result = Allocator::allocate(100, $weights, $previous, false);
+
+        $this->assertEquals(100, array_sum($result));
+        $this->assertEquals(0, $result[0]);
+        $this->assertEquals(0, $result[1]);
+
+        // The two eligible shareholders split 100 evenly
+        $cumulative2 = $previous[2] + $result[2];
+        $cumulative3 = $previous[3] + $result[3];
+        $this->assertEquals(50, $cumulative2);
+        $this->assertEquals(50, $cumulative3);
+    }
+
+    public function testNoNegativeUnequalWeightsOverAllocatedFairToRest()
+    {
+        // Unequal weights: shareholder 0 (weight 3) over-allocated, rest should be fair
+        $weights = array(3, 1, 1);
+        $previous = array(500, 10, 0);
+        $result = Allocator::allocate(100, $weights, $previous, false);
+
+        $this->assertEquals(100, array_sum($result));
+        $this->assertEquals(0, $result[0]);
+
+        // Remaining two have equal weight, so cumulative should differ by at most 1
+        $cum1 = $previous[1] + $result[1];
+        $cum2 = $previous[2] + $result[2];
+        $this->assertLessThanOrEqual(1, abs($cum1 - $cum2));
+    }
 }
