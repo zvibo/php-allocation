@@ -1,6 +1,9 @@
 {
     "name": "zvibo/php-allocation",
     "description": "auto-heal penny errors when distributing funds to shareholders",
+    "require": {
+        "php": ">=7.4"
+    },
     "autoload": {
         "psr-4": {
             "Allocation\\": "src/"
@@ -15,6 +18,5 @@
             "name": "Zvi Boshernitzan",
             "email": "zvi@kiva.org"
         }
-    ],
-    "minimum-stability": "dev"
+    ]
 }
